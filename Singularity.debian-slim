@@ -1,0 +1,151 @@
+Bootstrap: docker
+From: debian:stretch-20190506-slim
+#Stage: build                              # multi-stage builds since 3.2, we don't need anyway
+
+%environment
+    export LC_ALL=C                        # this variable is for programs that complain when no locale is set.
+
+%post -c /bin/bash
+    # this is the main post-setup stage where you customize your container.
+    # NOTE: `. thisroot.sh` is not compatible with the default shell from debian-slim (sh? dash?)
+    # so add -c /bin/bash to run the post section with bash.
+    # NOTE2: they broke this in singularity 3.0 - ??, so we have to hack around it...
+    # (issue #2656, #3260)
+    if test "$0" = "/bin/sh"; then
+        echo "Elevating script to bash"
+        sed -n -z '$p' "/proc/$$/cmdline" | sed 's/\x00/\n/g' | /bin/bash -ve
+        exit $?
+    fi
+    # run some checks:
+    ls -l /proc/$$/exe | grep bash    # should fail out if it can't find bash
+    apt-get update
+    # basic software install
+    apt-get install -y less
+    apt-get install -y nano
+    apt-get install -y wget
+    apt-get install -y cmake
+    # cmake also pulls in a bunch of other development basics
+    apt-get install -y libcurl4-openssl-dev
+    apt-get install -y bash-completion
+    apt-get install -y colordiff
+    # ROOT dependencies install
+    apt-get install -y libx11-dev libxpm-dev libxft-dev libxext-dev libpng-dev libjpeg-dev libgsl-dev libxml2-dev 
+    # ROOT libEve dependancies
+    apt-get install -y libglu1-mesa libglu1-mesa-dev libglew2.0 libglew-dev
+    # Boost dependencies
+    apt-get install libbz2-1.0 zlib1g zlib1g-dev
+    # before we start building we need to switch out the default g++7 with g++4.9 so we don't have ABI issues
+    # we need to add the old jessie repos to get access to old g++
+    cp /etc/apt/sources.list /etc/apt/sources.list_bk
+    echo "deb http://security.debian.org/debian-security/ jessie/updates main" >> /etc/apt/sources.list
+    echo "deb http://ftp.de.debian.org/debian jessie main" >> /etc/apt/sources.list
+    apt-get update
+    apt-get install -y g++-4.9
+    # not a good idea to keep them, mixing repos is dangerous
+    mv /etc/apt/sources.list_bk /etc/apt/sources.list && apt-get update
+    apt-get install -y git
+    # get python elements
+    apt-get install -y python3
+    apt-get install -y python3-pip
+    pip3 install numpy
+    pip3 install pandas
+    pip3 install tensorflow                                                 # should we pass --user ?
+    #echo "export PATH=/root/.local/bin:$PATH" >> $SINGULARITY_ENVIRONMENT  # if so, we need this
+    pip3 install matplotlib
+    pip3 install sklearn
+    ln -s /usr/bin/python3-config /usr/bin/python-config
+    # swap out all the symlinks to make g++4.9 default before we start to build
+    rm -rf /usr/bin/gcc /usr/bin/gcc-ar /usr/bin/gcc-nm /usr/bin/gcc-ranlib /usr/bin/g++
+    ln -s /usr/bin/gcc-ranlib-4.9 /usr/bin/gcc-ranlib
+    ln -s /usr/bin/gcc-nm-4.9 /usr/bin/gcc-nm
+    ln -s /usr/bin/gcc-ar-4.9 /usr/bin/gcc-ar
+    ln -s /usr/bin/gcc-4.9 /usr/bin/gcc
+    ln -s /usr/bin/g++-4.9 /usr/bin/g++
+    # OK, we will leave whatever may change to be bind-mounted in at runtime,
+    # but we should make the necessary bind points
+    mkdir /pnfs
+    mkdir /annie
+    mkdir /ToolAnalysis
+    # the container will provide software that normally lives in /ToolAnalysis/ToolDAQ,
+    # but the /ToolAnalysis folder must be kept empty so that we can bind mount a writable host folder to it.
+    # So: place the installed ToolDAQ components in some arbitrary location, and then we'll make symlinks
+    # to them in the host ToolAnalysis/ToolDAQ folder
+    mkdir /ToolDaqComponents
+    cd /ToolDaqComponents
+    mkdir ToolDAQ
+    cd ToolDAQ
+    git clone https://github.com/ToolDAQ/zeromq-4.0.7.git
+    cd zeromq-4.0.7/
+    ./configure --prefix=`pwd`
+    make -j8
+    make install || true
+    export LD_LIBRARY_PATH=`pwd`/lib:$LD_LIBRARY_PATH
+    cd ..
+    mkdir root-6.06.08
+    cd root-6.06.08
+    wget https://root.cern.ch/download/root_v6.06.08.source.tar.gz
+    tar -xzf root_v6.06.08.source.tar.gz
+    mv root-6.06.08 src
+    rm root_v6.06.08.source.tar.gz
+    mkdir build
+    mkdir install
+    # ROOT has problems playing with Python3.7 - the python3 version in the stretch repos
+    # so we need to fix the sourcefiles before we build
+    sed -i 's/_PyObject_GC_TRACK( vi );/PyObject_GC_Track( vi );/' src/bindings/pyroot/src/Pythonize.cxx
+    sed -i 's/PyROOT_PyUnicode_AsString( PyList_GET_ITEM( argl, i ) );/const_cast< char* >( PyROOT_PyUnicode_AsString( PyList_GET_ITEM( argl, i ) ) );/' src/bindings/pyroot/src/TPyROOTApplication.cxx
+    cd build
+    cmake -DCMAKE_INSTALL_PREFIX=`pwd`/../install -Dcxx14=OFF -Dcxx11=ON -Dgdml=ON -Dxml=ON -Dmt=ON -Dkrb5=ON -Dmathmore=ON -Dx11=ON -Dimt=ON -Dtmva=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo ../src
+    make -j8
+    make install
+    cd ..
+    sed -i '1i#!/bin/bash' install/bin/thisroot.sh   # build is done with /bin/sh, but thisroot.sh needs bash
+    . install/bin/thisroot.sh || true # ignore errors from absence of `man` wthin this.
+    cd ..
+    wget http://downloads.sourceforge.net/project/boost/boost/1.66.0/boost_1_66_0.tar.gz
+    tar zxf boost_1_66_0.tar.gz
+    rm -rf boost_1_66_0.tar.gz
+    cd boost_1_66_0
+    mkdir install
+    ./bootstrap.sh --prefix=`pwd`/install/  > /dev/null 2>/dev/null
+    ./b2 install iostreams
+    export LD_LIBRARY_PATH=`pwd`/install/lib:$LD_LIBRARY_PATH
+    cd ../
+    # we'll leave the remainder for binding in, since they're liable to change, but the image is immutable
+    # instead just make the bindpoints so we can bind in writable sources of these on the host
+    mkdir WCSimLib
+    mkdir MrdTrackLib
+    mkdir ToolDAQFramework
+
+%runscript
+# this section gets written to a script which is called when you run your container.
+#    echo "Arguments received: $*"
+#    exec echo "$@"
+    exec /bin/bash
+    # conveniences
+    export PS1='${debian_chroot:+($debian_chroot)}\[\033[00;33m\]\u@$(basename $SINGULARITY_CONTAINER)\[\033[00m\]:\[\033[00;36m\]\w\[\033[00m\]\$ '
+    alias ls='ls --color=auto --block-size=MB'
+    alias dir='dir --color=auto'
+    alias vdir='vdir --color=auto'
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+    alias less='less -R'
+    alias diff='colordiff'
+# IMPORTANT: The exec preceding the /bin/bash command makes the 'bash' process replace the runscript shell process (rather than running the bash process as a child, keeping the parent shell alive). This allows the runscript shell process to end, and only the process running within the container remains.
+
+%test
+# this runs at the end of the build, or if you call it on your container. This should return 0, otherwise builds on SingularityHub will consider the build a fail and trash the result!
+    echo "Testing testing, yes, h'mm... seems fine to me!"
+
+%labels
+# this section defines a series of key-value pairs that get stored into '/.singularity.d/labels.json' within your container. They can be viewed via 'singularity inspect container.simg'.
+    Author Marcus O\'Flaherty
+    Version v0.0.1
+
+%help
+# contents of this section can be viewed by calling 'singularity run-help container.simg' or via
+# `singularity inspect --helpfile container.simg`
+    This is a debian stretch based container that contains the dependencies for ToolAnalysis.
+    It provides boost 1.66, zmq 4.07, root 6.06.08, python3.5, pip3, numpy, pandas, tensorflow, scikit-learn and matplotlib. 
+    Other elements are considered to be under active development (MrdTrackLib, WCSimLib, ToolDAQFramework, ToolAnalysis etc) so are not included in this (immutabale) image.
+    Instead, a suitable bind-point at /ToolAnalysis is provided for a writable host directory where those elements may be worked on. Elements provided by the container are supplied in /ToolDaqComponents, and should be symlinked to their corresponding directories in the host /ToolAnalysis/ToolDAQ folder.
