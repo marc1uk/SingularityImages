@@ -1,0 +1,129 @@
+### Multi-stage build so we can strip out the source stuff used for building local copy of boost, root etc
+##############################
+# First stage is going to be things common to both final development image and that needed for intermediate builds
+### Download base image from repo
+FROM debian:jessie-slim as base
+
+# Gonna need to be root to do some installs
+USER root
+
+# Setup software dependancies needed for building root, boost etc
+RUN DEBIAN_FRONTEND=noninteractive apt-get update  \
+&&    apt-get install wget                         \
+&&    apt-get install cmake                        \
+&&    apt-get install libcurl4-openssl-dev         \
+    # ROOT dependencies install
+&&    apt-get install libx11-dev libxpm-dev libxft-dev libxext-dev libpng-dev libjpeg-dev libgsl-dev libxml2-dev \
+    # ROOT libEve dependancies
+&&    apt-get install libglu1-mesa libglu1-mesa-dev libglew2.0 libglew-dev \
+    # Boost dependencies
+&&    apt-get install libbz2-1.0 zlib1g zlib1g-dev \
+    # g++
+&&    apt-get install g++-4.9                      \
+&&    apt-get install git                          \
+&&    apt-get install python3                      \
+&&    apt-get clean                                \
+&&    rm -rf /var/lib/apt
+
+##############################
+## Next build stage will obtain and compile boost, root, zmq.
+## We do this in an intermediate build stage as we only need the compilation products
+FROM base as build
+
+# shouldn't need to be ROOT but it probably can't hurt?
+USER root
+
+WORKDIR /ToolDAQ/
+RUN   git clone https://github.com/ToolDAQ/zeromq-4.0.7.git \
+&&    mkdir zeromq-install                                  \
+&&    cd zeromq-4.0.7/                                      \
+&&    ./configure --prefix=`pwd../zeromq-install`           \
+&&    make -j8                                              \
+&&    make install || true                                  \
+#ENV LD_LIBRARY_PATH /ToolDAQ/zeromq-4.0.7.git/lib:$LD_LIBRARY_PATH
+
+#WORKDIR /ToolDAQ/
+RUN    mkdir root-6.06.08                                             \
+&&     cd root-6.06.08                                                \
+&&     wget https://root.cern.ch/download/root_v6.06.08.source.tar.gz \
+&&     tar -xzf root_v6.06.08.source.tar.gz                           \
+&&     mv root-6.06.08 src                                            \
+&&     rm root_v6.06.08.source.tar.gz                                 \
+&&     mkdir build                                                    \
+&&     mkdir install                                                  \
+&&     sed -i 's/_PyObject_GC_TRACK( vi );/PyObject_GC_Track( vi );/' src/bindings/pyroot/src/Pythonize.cxx \
+&&     sed -i 's/PyROOT_PyUnicode_AsString( PyList_GET_ITEM( argl, i ) );/const_cast< char* >( PyROOT_PyUnicode_AsString( PyList_GET_ITEM( argl, i ) ) );/' src/bindings/pyroot/src/TPyROOTApplication.cxx \
+&&     cd build                                                       \
+&&     cmake -DCMAKE_INSTALL_PREFIX=`pwd`/../install -Dcxx14=OFF -Dcxx11=ON -Dgdml=ON -Dxml=ON -Dmt=ON -Dkrb5=ON -Dmathmore=ON -Dx11=ON -Dimt=ON -Dtmva=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo ../src \
+&&      make -j8                                                      \
+&&      make install
+#ENV LD_LIBRARY_PATH `root-config --libdir`:$LD_LIBRARY_PATH
+
+#WORKDIR /ToolDAQ/
+RUN     mkdir boost-1.66                                               \
+&&      cd boost-1.66                                                  \
+&&      wget http://downloads.sourceforge.net/project/boost/boost/1.66.0/boost_1_66_0.tar.gz \
+&&      tar zxf boost_1_66_0.tar.gz                                    \
+&&      rm -rf boost_1_66_0.tar.gz                                     \
+&&      mkdir install                                                  \
+&&      cd boost_1_66_0                                                \
+&&     ./bootstrap.sh --prefix=`pwd`/../install/  > /dev/null 2>/dev/null   \
+&&     ./b2 install iostreams
+#ENV LD_LIBRARY_PATH /ToolDAQ/boost-1.66/install/lib:$LD_LIBRARY_PATH
+
+##############################
+### Start from a clean image again
+FROM base
+
+# apparently useful for programs that want a locale
+ENV LC_ALL C
+
+# be root to install software
+USER root
+
+# install additional software
+RUN DEBIAN_FRONTEND=noninteractive apt-get update  \
+&&    apt-get install less                         \
+&&    apt-get install nano                         \
+&&    apt-get install bash-completion              \
+&&    apt-get install colordiff                    \
+&&    apt-get install python3-pip                  \
+&&    apt-get clean                                \
+&&    rm -rf /var/lib/apt
+
+# make the symlink to python3-config
+RUN rm -rf /usr/bin/python-config && ln -s $(which $(/usr/bin/python3*-config)) /usr/bin/python-config
+
+# Copy over the compilation products from the previous stage
+COPY --from=build /ToolDAQ/zeromq-install /ToolDAQ/zeromq-4.0.7/
+COPY --from=build /ToolDAQ/root-6.06.08/install /ToolDAQ/root-6.06.08/
+COPY --from=build /ToolDAQ/boost-1.66/install /ToolDAQ/boost-1.66/
+
+# install pip software
+RUN pip3 install numpy pandas tensorflow matplotlib sklearn
+
+# setup the bind mount location for development
+VOLUME /ToolAnalysis
+WORKDIR /ToolAnalysis
+
+# define some standard aliases and a decent prompt
+RUN <<EOF
+cat > ~/.bashrc <<EOM
+    # conveniences
+    export PS1='${debian_chroot:+($debian_chroot)}\[\033[00;33m\]\u@$(basename $SINGULARITY_CONTAINER)\[\033[00m\]:\[\033[00;36m\]\w\[\033[00m\]\$ '
+    alias ls='ls --color=auto --block-size=MB'
+    alias dir='dir --color=auto'
+    alias vdir='vdir --color=auto'
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+    alias less='less -R'
+    alias diff='colordiff'
+EOM
+EOF
+
+# make shell use bash by default
+SHELL ["/bin/bash", "-c"]
+
+### Open bash when the container is run
+CMD ["/bin/bash"]
