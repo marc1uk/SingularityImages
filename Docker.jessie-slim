@@ -15,7 +15,7 @@ RUN   apt-get update  \
 &&    apt-get --yes --force-yes install cmake                        \
 &&    apt-get --yes --force-yes install libcurl4-openssl-dev         \
     # ROOT dependencies install
-&&    apt-get --yes --force-yes install libx11-dev libxpm-dev libxft-dev libxext-dev libpng-dev libjpeg-dev libgsl-dev libxml2-dev \
+&&    apt-get --yes --force-yes install libx11-dev libxpm-dev libxft-dev libxext-dev libpng-dev libjpeg-dev libgsl0-dev libxml2-dev \
     # ROOT libEve dependancies
 &&    apt-get --yes --force-yes install libglu1-mesa libglu1-mesa-dev libglew2.0 libglew-dev \
     # Boost dependencies
