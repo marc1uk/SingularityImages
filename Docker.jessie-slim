@@ -17,7 +17,7 @@ RUN   apt-get update  \
     # ROOT dependencies install
 &&    apt-get --yes --force-yes install libx11-dev libxpm-dev libxft-dev libxext-dev libpng-dev libjpeg-dev libgsl0-dev libxml2-dev \
     # ROOT libEve dependancies
-&&    apt-get --yes --force-yes install libglu1-mesa libglu1-mesa-dev libglew2.0 libglew-dev \
+&&    apt-get --yes --force-yes install libglu1-mesa libglu1-mesa-dev libglew1.10 libglew-dev \
     # Boost dependencies
 &&    apt-get --yes --force-yes install libbz2-1.0 zlib1g zlib1g-dev \
     # g++
