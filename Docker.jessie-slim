@@ -34,13 +34,15 @@ FROM base as build
 USER root
 
 WORKDIR /ToolDAQ/
-RUN   git clone https://github.com/ToolDAQ/zeromq-4.0.7.git \
-&&    mkdir zeromq-install                                  \
-&&    cd zeromq-4.0.7/                                      \
-&&    ./configure --prefix=`pwd../zeromq-install`           \
-&&    make -j8                                              \
-&&    make install || true                                  \
-#ENV LD_LIBRARY_PATH /ToolDAQ/zeromq-4.0.7.git/lib:$LD_LIBRARY_PATH
+RUN   mkdir zeromq-4.0.7                                              \
+&&    cd zeromq-4.0.7/                                                \
+&&    mkdir install                                                   \
+&&    git clone https://github.com/ToolDAQ/zeromq-4.0.7.git src       \
+&&    cd src/                                                         \
+&&    ./configure --prefix=`pwd`/../install                           \
+&&    make -j8                                                        \
+&&    make install || true                                            \
+#ENV LD_LIBRARY_PATH /ToolDAQ/zeromq-4.0.7/install/lib:$LD_LIBRARY_PATH
 
 #WORKDIR /ToolDAQ/
 RUN    mkdir root-6.06.08                                             \
@@ -48,16 +50,17 @@ RUN    mkdir root-6.06.08                                             \
 &&     wget https://root.cern.ch/download/root_v6.06.08.source.tar.gz \
 &&     tar -xzf root_v6.06.08.source.tar.gz                           \
 &&     mv root-6.06.08 src                                            \
-&&     rm root_v6.06.08.source.tar.gz                                 \
+&&     rm -rf root_v6.06.08.source.tar.gz                             \
 &&     mkdir build                                                    \
 &&     mkdir install                                                  \
 &&     sed -i 's/_PyObject_GC_TRACK( vi );/PyObject_GC_Track( vi );/' src/bindings/pyroot/src/Pythonize.cxx \
 &&     sed -i 's/PyROOT_PyUnicode_AsString( PyList_GET_ITEM( argl, i ) );/const_cast< char* >( PyROOT_PyUnicode_AsString( PyList_GET_ITEM( argl, i ) ) );/' src/bindings/pyroot/src/TPyROOTApplication.cxx \
 &&     cd build                                                       \
 &&     cmake -DCMAKE_INSTALL_PREFIX=`pwd`/../install -Dcxx14=OFF -Dcxx11=ON -Dgdml=ON -Dxml=ON -Dmt=ON -Dkrb5=ON -Dmathmore=ON -Dx11=ON -Dimt=ON -Dtmva=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo ../src \
-&&      make -j8                                                      \
-&&      make install
-#ENV LD_LIBRARY_PATH `root-config --libdir`:$LD_LIBRARY_PATH
+&&     make -j8                                                       \
+&&     make install
+#ENV LD_LIBRARY_PATH `root-config --libdir`:$LD_LIBRARY_PATH   ## !! won't work without thisroot.sh first
+#ENV LD_LIBRARY_PATH /ToolDAQ/root-6.06.08/install/libs:$LD_LIBRARY_PATH
 
 #WORKDIR /ToolDAQ/
 RUN     mkdir boost-1.66                                               \
@@ -95,7 +98,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update  \
 RUN rm -rf /usr/bin/python-config && ln -s $(which $(/usr/bin/python3*-config)) /usr/bin/python-config
 
 # Copy over the compilation products from the previous stage
-COPY --from=build /ToolDAQ/zeromq-install /ToolDAQ/zeromq-4.0.7/
+COPY --from=build /ToolDAQ/zeromq-4.0.7/install /ToolDAQ/zeromq-4.0.7/
 COPY --from=build /ToolDAQ/root-6.06.08/install /ToolDAQ/root-6.06.08/
 COPY --from=build /ToolDAQ/boost-1.66/install /ToolDAQ/boost-1.66/
 
