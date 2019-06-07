@@ -8,20 +8,21 @@ FROM debian:jessie-slim as base
 USER root
 
 # Setup software dependancies needed for building root, boost etc
-RUN DEBIAN_FRONTEND=noninteractive apt-get update  \
-&&    apt-get install wget                         \
-&&    apt-get install cmake                        \
-&&    apt-get install libcurl4-openssl-dev         \
+ENV DEBIAN_FRONTEND noninteractive      # seemed like putting this in front of the apt-get wasn't working...?
+RUN   apt-get update  \
+&&    apt-get --yes --force-yes install wget                         \
+&&    apt-get --yes --force-yes install cmake                        \
+&&    apt-get --yes --force-yes install libcurl4-openssl-dev         \
     # ROOT dependencies install
-&&    apt-get install libx11-dev libxpm-dev libxft-dev libxext-dev libpng-dev libjpeg-dev libgsl-dev libxml2-dev \
+&&    apt-get --yes --force-yes install libx11-dev libxpm-dev libxft-dev libxext-dev libpng-dev libjpeg-dev libgsl-dev libxml2-dev \
     # ROOT libEve dependancies
-&&    apt-get install libglu1-mesa libglu1-mesa-dev libglew2.0 libglew-dev \
+&&    apt-get --yes --force-yes install libglu1-mesa libglu1-mesa-dev libglew2.0 libglew-dev \
     # Boost dependencies
-&&    apt-get install libbz2-1.0 zlib1g zlib1g-dev \
+&&    apt-get --yes --force-yes install libbz2-1.0 zlib1g zlib1g-dev \
     # g++
-&&    apt-get install g++-4.9                      \
-&&    apt-get install git                          \
-&&    apt-get install python3                      \
+&&    apt-get --yes --force-yes install g++-4.9                      \
+&&    apt-get --yes --force-yes install git                          \
+&&    apt-get --yes --force-yes install python3                      \
 &&    apt-get clean                                \
 &&    rm -rf /var/lib/apt
 
@@ -41,7 +42,7 @@ RUN   mkdir zeromq-4.0.7                                              \
 &&    cd src/                                                         \
 &&    ./configure --prefix=`pwd`/../install                           \
 &&    make -j8                                                        \
-&&    make install || true                                            \
+&&    make install || true
 #ENV LD_LIBRARY_PATH /ToolDAQ/zeromq-4.0.7/install/lib:$LD_LIBRARY_PATH
 
 #WORKDIR /ToolDAQ/
@@ -86,11 +87,11 @@ USER root
 
 # install additional software
 RUN DEBIAN_FRONTEND=noninteractive apt-get update  \
-&&    apt-get install less                         \
-&&    apt-get install nano                         \
-&&    apt-get install bash-completion              \
-&&    apt-get install colordiff                    \
-&&    apt-get install python3-pip                  \
+&&    apt-get --yes --force-yes install less                         \
+&&    apt-get --yes --force-yes install nano                         \
+&&    apt-get --yes --force-yes install bash-completion              \
+&&    apt-get --yes --force-yes install colordiff                    \
+&&    apt-get --yes --force-yes install python3-pip                  \
 &&    apt-get clean                                \
 &&    rm -rf /var/lib/apt
 
