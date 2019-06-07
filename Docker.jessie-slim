@@ -8,7 +8,8 @@ FROM debian:jessie-slim as base
 USER root
 
 # Setup software dependancies needed for building root, boost etc
-ENV DEBIAN_FRONTEND noninteractive      # seemed like putting this in front of the apt-get wasn't working...?
+ENV DEBIAN_FRONTEND="noninteractive"
+
 RUN   apt-get update  \
 &&    apt-get --yes --force-yes install wget                         \
 &&    apt-get --yes --force-yes install cmake                        \
