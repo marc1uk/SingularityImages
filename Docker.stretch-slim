@@ -2,7 +2,7 @@
 ##############################
 # First stage is going to be things common to both final development image and that needed for intermediate builds
 ### Download base image from repo
-FROM debian:jessie-slim as base
+FROM debian:stretch-slim as base
 
 # Gonna need to be root to do some installs
 USER root
@@ -15,16 +15,25 @@ RUN   apt-get update  \
 &&    apt-get --yes --force-yes install cmake                        \
 &&    apt-get --yes --force-yes install libcurl4-openssl-dev         \
     # ROOT dependencies install
-&&    apt-get --yes --force-yes install libx11-dev libxpm-dev libxft-dev libxext-dev libpng-dev libjpeg-dev libgsl0-dev libxml2-dev \
+&&    apt-get --yes --force-yes install libx11-dev libxpm-dev libxft-dev libxext-dev libpng-dev libjpeg-dev libgsl-dev libxml2-dev \
     # ROOT libEve dependancies
-&&    apt-get --yes --force-yes install libglu1-mesa libglu1-mesa-dev libglew1.10 libglew-dev \
+&&    apt-get --yes --force-yes install libglu1-mesa libglu1-mesa-dev libglew2.0 libglew-dev \
     # Boost dependencies
 &&    apt-get --yes --force-yes install libbz2-1.0 zlib1g zlib1g-dev \
     # g++
+    # switch out the default g++7 with g++4.9 so we don't have ABI issues
+    # we need to add the old jessie repos to get access to old g++
+&&    cp /etc/apt/sources.list /etc/apt/sources.list_bk              \
+&&    echo "deb http://security.debian.org/debian-security/ jessie/updates main" >> /etc/apt/sources.list \
+&&    echo "deb http://ftp.de.debian.org/debian jessie main" >> /etc/apt/sources.list \
+&&    apt-get update                                                 \
 &&    apt-get --yes --force-yes install g++-4.9                      \
+    # not a good idea to keep them, mixing repos is dangerous
+&&    mv /etc/apt/sources.list_bk /etc/apt/sources.list              \
+&&    apt-get update                                                 \
 &&    apt-get --yes --force-yes install git                          \
 &&    apt-get --yes --force-yes install python3                      \
-&&    apt-get clean                                \
+&&    apt-get clean                                                  \
 &&    rm -rf /var/lib/apt
 
 # make the standard symlinks from g++ to g++4.9. Surprised these aren't made during installation...
@@ -80,7 +89,7 @@ RUN     mkdir boost-1.66                                               \
 &&      rm -rf boost_1_66_0.tar.gz                                     \
 &&      mkdir install                                                  \
 &&      cd boost_1_66_0                                                \
-&&     ./bootstrap.sh --prefix=`pwd`/../install/  > /dev/null 2>/dev/null   \
+&&     ./bootstrap.sh --prefix=`pwd`/../install/  > /dev/null 2>/dev/null \
 &&     ./b2 install iostreams
 #ENV LD_LIBRARY_PATH /ToolDAQ/boost-1.66/install/lib:$LD_LIBRARY_PATH
 
@@ -95,13 +104,13 @@ ENV LC_ALL C
 USER root
 
 # install additional software
-RUN DEBIAN_FRONTEND=noninteractive apt-get update  \
+RUN DEBIAN_FRONTEND=noninteractive apt-get update                    \
 &&    apt-get --yes --force-yes install less                         \
 &&    apt-get --yes --force-yes install nano                         \
 &&    apt-get --yes --force-yes install bash-completion              \
 &&    apt-get --yes --force-yes install colordiff                    \
 &&    apt-get --yes --force-yes install python3-pip                  \
-&&    apt-get clean                                \
+&&    apt-get clean                                                  \
 &&    rm -rf /var/lib/apt
 
 # make the symlink to python3-config
