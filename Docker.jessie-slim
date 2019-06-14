@@ -104,13 +104,23 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update  \
 &&    apt-get clean                                \
 &&    rm -rf /var/lib/apt
 
+# make the standard symlinks from g++ to g++4.9. I don't know why this isn't copied from base...?
+RUN   rm -rf /usr/bin/gcc /usr/bin/gcc-ar /usr/bin/gcc-nm /usr/bin/gcc-ranlib /usr/bin/g++ \
+&&    ln -s /usr/bin/gcc-ranlib-4.9 /usr/bin/gcc-ranlib              \
+&&    ln -s /usr/bin/gcc-nm-4.9 /usr/bin/gcc-nm                      \
+&&    ln -s /usr/bin/gcc-ar-4.9 /usr/bin/gcc-ar                      \
+&&    ln -s /usr/bin/gcc-4.9 /usr/bin/gcc                            \
+&&    ln -s /usr/bin/g++-4.9 /usr/bin/g++
+
 # make the symlink to python3-config
 RUN rm -rf /usr/bin/python-config && ln -s $(which $(/usr/bin/python3*-config)) /usr/bin/python-config
 
 # Copy over the compilation products from the previous stage
 COPY --from=build /ToolDAQ/zeromq-4.0.7/install /ToolDAQ/zeromq-4.0.7/
+# zeromq.hpp isn't installed with the standard zmq install, copy it manually
+COPY --from=build /ToolDAQ/zeromq-4.0.7/src/include/zmq.hpp /ToolDAQ/zeromq-4.0.7/include/
 COPY --from=build /ToolDAQ/root-6.06.08/install /ToolDAQ/root-6.06.08/
-COPY --from=build /ToolDAQ/boost-1.66/install /ToolDAQ/boost-1.66/
+COPY --from=build /ToolDAQ/boost-1.66/install /ToolDAQ/boost_1_66_0/install
 
 # install pip software
 RUN pip3 install numpy pandas tensorflow matplotlib sklearn

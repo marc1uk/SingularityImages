@@ -1,5 +1,6 @@
 # conveniences
 export PS1='${debian_chroot:+($debian_chroot)}\[\033[00;33m\]\u@$(basename $SINGULARITY_CONTAINER)\[\033[00m\]:\[\033[00;36m\]\w\[\033[00m\]\$ '
+#export PS1='${debian_chroot:+($debian_chroot)}\[\033[00;32m\]\u@${SINGULARITY_CONTAINER:-\h}\[\033[00m\]:\[\033[00;36m\]\w\[\033[00m\]\$ '
 alias ls='ls --color=auto --block-size=MB'
 alias dir='dir --color=auto'
 alias vdir='vdir --color=auto'
