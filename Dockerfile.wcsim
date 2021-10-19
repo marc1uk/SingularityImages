@@ -1,28 +1,28 @@
-### Download base image from cern repo on docker hub
-FROM cern/cc7-base:latest as base
+# Download base image from cern repo on docker hub
+FROM cern/cc7-base:latest
 
 ### Run the following commands as super user (root):
 USER root
 
 ### install prerequisites
-yum install -y cmake \
-               binutils \
-               make \
-               git \
-               tar \
-               wget \
-               devtoolset-3-gcc \
-               devtoolset-3-gcc-c++ \
-               which \
-               expat-devel \
-               xerces-c-devel \
-               libX11-devel \
-               libXmu-devel \
-               libGL-devel \
-               libGLU-devel \
-               libXpm-devel \
-               libXft \
-               libXft-devel \
+RUN yum install -y cmake \
+                   binutils \
+                   make \
+                   git \
+                   tar \
+                   wget \
+                   devtoolset-3-gcc \
+                   devtoolset-3-gcc-c++ \
+                   which \
+                   expat-devel \
+                   xerces-c-devel \
+                   libX11-devel \
+                   libXmu-devel \
+                   libGL-devel \
+                   libGLU-devel \
+                   libXpm-devel \
+                   libXft \
+                   libXft-devel \
 && yum clean all \
 && rm -rf /var/cache/yum
 
@@ -42,12 +42,12 @@ RUN mkdir /home/annie/Geant4 && \
     wget http://cern.ch/geant4-data/releases/geant4.10.01.p03.tar.gz && \
     tar -xzf geant4.10.01.p03.tar.gz && \
     rm geant4.10.01.p03.tar.gz && \
-    mkdir /home/annie/Geant4/install /home/annie/Geant4/build
-RUN cd /home/annie/Geant4/build && \
+    mkdir /home/annie/Geant4/install /home/annie/Geant4/build && \
+    cd /home/annie/Geant4/build && \
     cmake -DCMAKE_INSTALL_PREFIX=/home/annie/Geant4/install -DGEANT4_INSTALL_DATADIR=/home/annie/Geant4/install/share/data -DGEANT4_BUILD_MULTITHREADED=ON -DGEANT4_BUILD_CXXSTD=c++11 -DGEANT4_USE_GDML=ON -DGEANT4_USE_OPENGL_X11=ON -DGEANT4_INSTALL_DATA=ON /home/annie/Geant4/geant4.10.01.p03 -DGEANT4_INSTALL_DATA=ON && \
     make -j8 && \
-    make install
-RUN rm -r /home/annie/Geant4/geant4.10.01.p03 && \
+    make install && \
+    rm -r /home/annie/Geant4/geant4.10.01.p03 && \
     rm -r /home/annie/Geant4/build
 
 # build ROOT
@@ -55,24 +55,16 @@ RUN mkdir /home/annie/ROOT && \
     cd /home/annie/ROOT && \
     wget https://root.cern/download/root_v6.06.08.source.tar.gz && \
     tar -xzf root_v6.06.08.source.tar.gz && \
-    rm root_v6.06.08.source.tar.gz
-    mkdir /home/annie/ROOT/install /home/annie/ROOT/build
-RUN cd /home/annie/ROOT/build && \
+    rm root_v6.06.08.source.tar.gz && \
+    mkdir /home/annie/ROOT/install /home/annie/ROOT/build && \
+    cd /home/annie/ROOT/build && \
     cmake -DCMAKE_INSTALL_PREFIX=/home/annie/ROOT/install -Dcxx11=ON -Dmt=ON -Dx11=ON -DCMAKE_BUILD_TYPE=Rel /home/annie/ROOT/root-6.06.08 && \
     make -j8 && \
-    make install
-RUN rm -r /home/annie/ROOT/root-6.06.08 && \
+    make install && \
+    rm -r /home/annie/ROOT/root-6.06.08 && \
     rm -r /home/annie/ROOT/build
 
 # TODO - install GENIE? maybe v3?
-
-##############################
-### Start from a clean image again to drop the bits we don't need for a slimmer image
-FROM base as build
-
-USER root
-
-COPY --from=build /home/annie /home/annie
 
 # build WCSim
 RUN mkdir /home/annie/WCSim && \
@@ -108,5 +100,6 @@ RUN echo "#!/bin/bash"                                                          
     echo "alias diff='diff -s'"                                                       >> /home/annie/setup
 
 ### Open terminal
+WORKDIR /home/annie/WCSim
 ENTRYPOINT ["/bin/bash", "--rcfile", "/home/annie/setup"]
 #CMD ["/home/annie/WCSim/build/WCSim"]
